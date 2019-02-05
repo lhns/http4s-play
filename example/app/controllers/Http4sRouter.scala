@@ -13,10 +13,10 @@ import scala.concurrent.ExecutionContext
 class Http4sRouter @Inject()(implicit executionContext: ExecutionContext) extends SimpleRouter {
   implicit val contextShift: ContextShift[IO] = IO.contextShift(executionContext)
 
-  val exampleService: HttpRoutes[IO] = HttpRoutes.of[IO] {
-    case GET -> _ =>
+  val exampleRoutes: HttpRoutes[IO] = HttpRoutes.of[IO] {
+    case GET -> Root / "hello" =>
       Ok(s"Hello World!")
   }
 
-  override def routes: Routes = new PlayRouteBuilder[IO](exampleService).build
+  override def routes: Routes = PlayRouteBuilder[IO](exampleRoutes).build
 }

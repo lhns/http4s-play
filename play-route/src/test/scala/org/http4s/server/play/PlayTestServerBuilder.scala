@@ -39,9 +39,9 @@ class PlayTestServerBuilder[F[_]](hostname: String,
         AkkaHttpServer.fromRouterWithComponents(serverConfig) { _ =>
           services
             .map {
-              case (service, prefix) =>
+              case (routes, prefix) =>
                 PlayRouteBuilder
-                  .withPrefix(prefix, new PlayRouteBuilder(service).build)
+                  .withPrefix(prefix, PlayRouteBuilder(routes).build)
             }
             .foldLeft(PartialFunction.empty: _root_.play.api.routing.Router.Routes)(_.orElse(_))
         }

@@ -1,144 +1,77 @@
 package org.http4s.server.play
 
-import akka.stream.scaladsl.{Sink, Source}
-import akka.util.ByteString
 import cats.data.OptionT
-import cats.effect.{Async, ConcurrentEffect, IO}
+import cats.effect.ConcurrentEffect
 import cats.syntax.all._
-import fs2.Chunk
-import fs2.interop.reactivestreams._
-import org.http4s.server.play.PlayRouteBuilder.{PlayAccumulator, PlayRouting, PlayTargetStream}
-import org.http4s.util.CaseInsensitiveString
-import org.http4s.{EmptyBody, EntityBody, Header, Headers, HttpRoutes, Method, Request, Response, Uri}
-import play.api.http.HttpEntity.Streamed
-import play.api.libs.streams.Accumulator
+import org.http4s.server.play.PlayRouteBuilder.PlayRouting
+import org.http4s.{HttpApp, HttpRoutes, Method, Response}
 import play.api.mvc._
 
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, ExecutionContext, Future, Promise}
+import scala.concurrent.{Await, ExecutionContext}
 import scala.language.higherKinds
 
-class PlayRouteBuilder[F[_]](service: HttpRoutes[F])
-                            (implicit
-                             F: ConcurrentEffect[F],
-                             executionContext: ExecutionContext) {
+trait PlayRouteBuilder[F[_]] {
+  protected def routeMatches(requestHeader: RequestHeader, method: Method): Boolean
 
-  type UnwrappedKleisli = Request[F] => OptionT[F, Response[F]]
-  private[this] val unwrappedRun: UnwrappedKleisli = service.run
+  protected def handler: Handler
 
-  def requestHeaderToRequest(requestHeader: RequestHeader, method: Method): Request[F] =
-    Request(
-      method = method,
-      uri = Uri(path = requestHeader.uri),
-      headers = Headers.apply(requestHeader.headers.toMap.toList.flatMap {
-        case (headerName, values) =>
-          values.map { value =>
-            Header(headerName, value)
-          }
-      }),
-      body = EmptyBody
-    )
+  def build: PlayRouting = new PartialFunction[RequestHeader, Handler]() {
+    override def isDefinedAt(requestHeader: RequestHeader): Boolean =
+      Method.fromString(requestHeader.method) match {
+        case Right(method) =>
+          routeMatches(requestHeader, method)
 
-  def convertStream(responseStream: EntityBody[F]): PlayTargetStream = {
-    val entityBody: fs2.Stream[F, ByteString] =
-      responseStream.chunks.map(chunk => ByteString(chunk.toArray))
-
-    Source.fromPublisher(entityBody.toUnicastPublisher())
-  }
-
-  def effectToFuture[T](eff: F[T]): Future[T] = {
-    val promise = Promise[T]
-
-    F.runAsync(eff) {
-      case Left(bad) =>
-        IO(promise.failure(bad))
-      case Right(good) =>
-        IO(promise.success(good))
-    }
-      .unsafeRunSync()
-
-    promise.future
-  }
-
-  /**
-    * A Play accumulator Sinks HTTP data in, and then pumps out a future of a Result.
-    * That Result will have a Source as the response HTTP Entity.
-    *
-    * Here we create a unattached sink, map its materialized value into a publisher,
-    * convert that into an FS2 Stream, then pipe the request body into the http4s request.
-    */
-  def playRequestToPlayResponse(requestHeader: RequestHeader, method: Method): PlayAccumulator = {
-    val sink: Sink[ByteString, Future[Result]] = {
-      Sink.asPublisher[ByteString](fanout = false).mapMaterializedValue { publisher =>
-        val requestBodyStream: fs2.Stream[F, Byte] =
-          publisher.toStream().flatMap(bs => fs2.Stream.chunk(Chunk.bytes(bs.toArray)))
-
-        val http4sRequest =
-          requestHeaderToRequest(requestHeader, method).withBodyStream(requestBodyStream)
-
-        /** The .get here is safe because this was already proven in the pattern match of the caller **/
-        val wrappedResponse: F[Response[F]] = unwrappedRun(http4sRequest).value.map(_.get)
-        val wrappedResult: F[Result] = wrappedResponse.map { response =>
-          Result(
-            header = convertResponseToHeader(response),
-            body = Streamed(
-              data = convertStream(response.body),
-              contentLength = response.contentLength,
-              contentType = response.contentType.map(_.value)
-            )
-          )
-        }
-
-        effectToFuture[Result](Async.shift(executionContext) *> wrappedResult)
+        case _ =>
+          false
       }
-    }
-    Accumulator.apply(sink)
+
+    override def apply(requestHeader: RequestHeader): Handler = handler
   }
-
-  def convertResponseToHeader(response: Response[F]): ResponseHeader =
-    ResponseHeader(
-      status = response.status.code,
-      headers = response.headers.collect {
-        case header if !PlayRouteBuilder.AkkaHttpSetsSeparately.contains(header.name) =>
-          header.parsed.name.value -> header.parsed.value
-      }.toMap
-    )
-
-  def routeMatches(requestHeader: RequestHeader, method: Method): Boolean = {
-    val computeRequestHeader: F[Option[Response[F]]] = F.delay {
-      val playRequest = requestHeaderToRequest(requestHeader, method)
-      val optionalResponse: OptionT[F, Response[F]] =
-        unwrappedRun.apply(playRequest)
-      val efff: F[Option[Response[F]]] = optionalResponse.value
-      efff
-    }.flatten
-
-    val matches = effectToFuture[Boolean](Async.shift(executionContext) *> computeRequestHeader.map(_.isDefined))
-
-    Await.result(matches, Duration.Inf)
-  }
-
-  def build: PlayRouting = {
-    case requestHeader
-      if Method.fromString(requestHeader.method).isRight &&
-        routeMatches(requestHeader, Method.fromString(requestHeader.method).right.get) =>
-      EssentialAction { requestHeader =>
-        playRequestToPlayResponse(
-          requestHeader,
-          Method.fromString(requestHeader.method).right.get
-        )
-      }
-  }
-
 }
 
 object PlayRouteBuilder {
+  def apply[F[_] : ConcurrentEffect](routes: HttpRoutes[F])
+                                    (implicit executionContext: ExecutionContext): PlayRouteBuilder[F] =
+    new HttpRoutesBuilder[F](routes)
+
+  def fromHttpApp[F[_] : ConcurrentEffect](httpApp: HttpApp[F])
+                                          (implicit executionContext: ExecutionContext): PlayRouteBuilder[F] =
+    new HttpAppBuilder[F](httpApp)
+
+
+  private class HttpRoutesBuilder[F[_]](routes: HttpRoutes[F])
+                                       (implicit
+                                        F: ConcurrentEffect[F],
+                                        executionContext: ExecutionContext) extends PlayRouteBuilder[F] {
+    override protected def routeMatches(requestHeader: RequestHeader, method: Method): Boolean = {
+      val matches: F[Boolean] = F.defer {
+        val http4sRequest = requestHeaderToRequest[F](requestHeader, method)
+        val optionalResponse: OptionT[F, Response[F]] = routes(http4sRequest)
+        optionalResponse.value.map(_.isDefined)
+      }
+
+      Await.result(effectToFuture[F, Boolean](matches), Duration.Inf)
+    }
+
+    override protected def handler: Handler = {
+      /** The .get here is safe because this was already proven in the pattern match of the caller **/
+      Http4sHandler(routes.mapF(_.value.map(_.get)))
+    }
+  }
+
+
+  private class HttpAppBuilder[F[_]](httpApp: HttpApp[F])
+                                    (implicit
+                                     F: ConcurrentEffect[F],
+                                     executionContext: ExecutionContext) extends PlayRouteBuilder[F] {
+    override protected def routeMatches(requestHeader: RequestHeader, method: Method): Boolean = true
+
+    override protected def handler: Handler = Http4sHandler(httpApp)
+  }
+
 
   type PlayRouting = PartialFunction[RequestHeader, Handler]
-
-  type PlayAccumulator = Accumulator[ByteString, Result]
-
-  type PlayTargetStream = Source[ByteString, _]
 
   /** Borrowed from Play for now **/
   def withPrefix(prefix: String,
@@ -154,8 +87,4 @@ object PlayRouteBuilder {
       }
       Function.unlift(prefixed.lift.andThen(_.flatMap(t.lift)))
     }
-
-  val AkkaHttpSetsSeparately: Set[CaseInsensitiveString] =
-    Set("Content-Type", "Content-Length", "Transfer-Encoding").map(CaseInsensitiveString.apply)
-
 }
