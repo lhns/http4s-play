@@ -1,4 +1,6 @@
-version := "0.0.1"
+inThisBuild(Seq(
+  version := "0.0.1"
+))
 
 lazy val `examples-play` = project.in(file("example"))
   .enablePlugins(PlayScala)
@@ -12,7 +14,6 @@ lazy val `examples-play` = project.in(file("example"))
     ),
   )
   .dependsOn(`play-route`)
-
 
 lazy val `play-route` = project
   .settings(
