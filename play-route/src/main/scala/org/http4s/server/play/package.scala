@@ -7,8 +7,8 @@ import cats.effect.{Async, ConcurrentEffect, IO}
 import cats.syntax.all._
 import fs2.interop.reactivestreams._
 import fs2.{Chunk, Stream}
+import org.http4s._
 import org.http4s.util.CaseInsensitiveString
-import org.http4s.{EmptyBody, Header, Headers, Method, Request, Response, Uri}
 
 import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.language.higherKinds
@@ -33,13 +33,13 @@ package object play {
 
 
   private[play] def byteStreamSource[F[_] : ConcurrentEffect](stream: Stream[F, Byte]): Source[ByteString, _] =
-    Source.lazily { () =>
-      Source.fromPublisher(stream.chunks.map(chunk => ByteString(chunk.toArray)).toUnicastPublisher())
+    Source.lazySource { () =>
+      Source.fromPublisher(stream.chunks.map(chunk => ByteString(chunk.toArray)).toUnicastPublisher)
     }
 
   private[play] def byteStreamSink[F[_] : ConcurrentEffect, E](f: Stream[F, Byte] => E): Sink[ByteString, E] =
     Sink.asPublisher[ByteString](fanout = false).mapMaterializedValue { publisher =>
-      val stream = publisher.toStream().flatMap(bs => Stream.chunk(Chunk.bytes(bs.toArray)))
+      val stream = publisher.toStream.flatMap(bs => Stream.chunk(Chunk.bytes(bs.toArray)))
       f(stream)
     }
 
@@ -64,7 +64,7 @@ package object play {
   def responseToResponseHeader[F[_]](response: Response[F]): ResponseHeader =
     ResponseHeader(
       status = response.status.code,
-      headers = response.headers.collect {
+      headers = response.headers.toList.collect {
         case header if !AkkaHttpSetsSeparately.contains(header.name) =>
           header.parsed.name.value -> header.parsed.value
       }.toMap
