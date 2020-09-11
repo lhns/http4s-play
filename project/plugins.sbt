@@ -1,3 +1,3 @@
-resolvers += "Typesafe repository" at "http://repo.typesafe.com/typesafe/releases/"
+addSbtPlugin("com.timushev.sbt" % "sbt-updates" % "0.5.1")
 
-addSbtPlugin("com.typesafe.play" % "sbt-plugin" % "2.6.20") 
+addSbtPlugin("com.typesafe.play" % "sbt-plugin" % "2.8.2") 
