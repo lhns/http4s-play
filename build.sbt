@@ -59,8 +59,8 @@ lazy val `play-route` = project
     libraryDependencies ++= Seq(
       "com.typesafe.play" %% "play" % "2.8.7",
       "com.typesafe.play" %% "play-akka-http-server" % "2.8.7" % "test",
-      "co.fs2" %% "fs2-core" % "2.4.6",
-      "co.fs2" %% "fs2-reactive-streams" % "2.4.6",
+      "co.fs2" %% "fs2-core" % "2.5.3",
+      "co.fs2" %% "fs2-reactive-streams" % "2.5.3",
       "org.http4s" %% "http4s-core" % "0.21.20",
       "org.http4s" %% "http4s-server" % "0.21.20" % "test",
       "org.http4s" %% "http4s-testing" % "0.21.20" % "test",
