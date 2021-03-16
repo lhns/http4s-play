@@ -1,3 +1,5 @@
+ThisBuild / versionScheme := Some("early-semver")
+
 lazy val commonSettings: Seq[Setting[_]] = Seq(
   organization := "de.lolhens",
   version := "0.0.1-SNAPSHOT",
