@@ -65,7 +65,6 @@ lazy val `play-route` = project
       "co.fs2" %% "fs2-reactive-streams" % "3.0.5",
       "org.http4s" %% "http4s-core" % "0.23.0",
       "org.http4s" %% "http4s-server" % "0.23.0" % Test,
-      "org.http4s" %% "http4s-testing" % "0.23.0" % Test,
     )
   )
 

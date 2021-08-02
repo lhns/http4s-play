@@ -1,15 +1,15 @@
 package org.http4s.server.play
 
 import cats.data.OptionT
-import cats.effect.ConcurrentEffect
+import cats.effect.Async
+import cats.effect.std.Dispatcher
 import cats.syntax.all._
 import org.http4s.server.play.PlayRouteBuilder.PlayRouting
 import org.http4s.{HttpApp, HttpRoutes, Method, Response}
 import play.api.mvc._
 
+import scala.concurrent.Await
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, ExecutionContext}
-import scala.language.higherKinds
 
 trait PlayRouteBuilder[F[_]] {
   protected def routeMatches(requestHeader: RequestHeader, method: Method): Boolean
@@ -31,19 +31,19 @@ trait PlayRouteBuilder[F[_]] {
 }
 
 object PlayRouteBuilder {
-  def apply[F[_] : ConcurrentEffect](routes: HttpRoutes[F])
-                                    (implicit executionContext: ExecutionContext): PlayRouteBuilder[F] =
+  def apply[F[_] : Async](routes: HttpRoutes[F])
+                         (implicit dispatcher: Dispatcher[F]): PlayRouteBuilder[F] =
     new HttpRoutesBuilder[F](routes)
 
-  def fromHttpApp[F[_] : ConcurrentEffect](httpApp: HttpApp[F])
-                                          (implicit executionContext: ExecutionContext): PlayRouteBuilder[F] =
+  def fromHttpApp[F[_] : Async](httpApp: HttpApp[F])
+                               (implicit dispatcher: Dispatcher[F]): PlayRouteBuilder[F] =
     new HttpAppBuilder[F](httpApp)
 
 
   private class HttpRoutesBuilder[F[_]](routes: HttpRoutes[F])
                                        (implicit
-                                        F: ConcurrentEffect[F],
-                                        executionContext: ExecutionContext) extends PlayRouteBuilder[F] {
+                                        F: Async[F],
+                                        dispatcher: Dispatcher[F]) extends PlayRouteBuilder[F] {
     override protected def routeMatches(requestHeader: RequestHeader, method: Method): Boolean = {
       val matches: F[Boolean] = F.defer {
         val http4sRequest = requestHeaderToRequest[F](requestHeader, method)
@@ -51,11 +51,11 @@ object PlayRouteBuilder {
         optionalResponse.value.map(_.isDefined)
       }
 
-      Await.result(effectToFuture[F, Boolean](matches), Duration.Inf)
+      Await.result(dispatcher.unsafeToFuture(matches), Duration.Inf)
     }
 
     override protected def handler: Handler = {
-      /** The .get here is safe because this was already proven in the pattern match of the caller **/
+      /** The .get here is safe because this was already proven in the pattern match of the caller * */
       Http4sHandler(routes.mapF(_.value.map(_.get)))
     }
   }
@@ -63,8 +63,8 @@ object PlayRouteBuilder {
 
   private class HttpAppBuilder[F[_]](httpApp: HttpApp[F])
                                     (implicit
-                                     F: ConcurrentEffect[F],
-                                     executionContext: ExecutionContext) extends PlayRouteBuilder[F] {
+                                     F: Async[F],
+                                     dispatcher: Dispatcher[F]) extends PlayRouteBuilder[F] {
     override protected def routeMatches(requestHeader: RequestHeader, method: Method): Boolean = true
 
     override protected def handler: Handler = Http4sHandler(httpApp)
@@ -73,7 +73,7 @@ object PlayRouteBuilder {
 
   type PlayRouting = PartialFunction[RequestHeader, Handler]
 
-  /** Borrowed from Play for now **/
+  /** Borrowed from Play for now * */
   def withPrefix(prefix: String,
                  t: _root_.play.api.routing.Router.Routes): _root_.play.api.routing.Router.Routes =
     if (prefix == "/") {
