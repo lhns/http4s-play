@@ -1,6 +1,6 @@
 addSbtPlugin("com.timushev.sbt" % "sbt-updates" % "0.6.0")
 
-addSbtPlugin("com.typesafe.play" % "sbt-plugin" % "2.8.10")
+addSbtPlugin("com.typesafe.play" % "sbt-plugin" % "2.8.11")
 
 addSbtPlugin("org.xerial.sbt" % "sbt-sonatype" % "3.9.10")
 
