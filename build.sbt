@@ -63,8 +63,8 @@ lazy val `play-route` = project
       "com.typesafe.play" %% "play-akka-http-server" % "2.8.13" % "test",
       "co.fs2" %% "fs2-core" % "3.2.4",
       "co.fs2" %% "fs2-reactive-streams" % "3.2.4",
-      "org.http4s" %% "http4s-core" % "0.23.8",
-      "org.http4s" %% "http4s-server" % "0.23.8" % Test,
+      "org.http4s" %% "http4s-core" % "0.23.9",
+      "org.http4s" %% "http4s-server" % "0.23.9" % Test,
     )
   )
 
@@ -81,6 +81,6 @@ lazy val `examples-play` = project.in(file("example"))
     libraryDependencies ++= Seq(
       guice,
       "javax.xml.bind" % "jaxb-api" % "2.3.1",
-      "org.http4s" %% "http4s-dsl" % "0.23.8",
+      "org.http4s" %% "http4s-dsl" % "0.23.9",
     )
   )
