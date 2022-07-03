@@ -5,7 +5,7 @@ lazy val commonSettings: Seq[Setting[_]] = Seq(
   version := "0.0.1-SNAPSHOT",
 
   scalaVersion := "2.13.8",
-  crossScalaVersions := Seq("2.12.15", scalaVersion.value),
+  crossScalaVersions := Seq("2.12.16", scalaVersion.value),
 
   licenses += ("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0")),
 
@@ -61,10 +61,10 @@ lazy val `play-route` = project
     libraryDependencies ++= Seq(
       "com.typesafe.play" %% "play" % "2.8.16",
       "com.typesafe.play" %% "play-akka-http-server" % "2.8.16" % "test",
-      "co.fs2" %% "fs2-core" % "3.2.9",
-      "co.fs2" %% "fs2-reactive-streams" % "3.2.9",
-      "org.http4s" %% "http4s-core" % "0.23.12",
-      "org.http4s" %% "http4s-server" % "0.23.12" % Test,
+      "co.fs2" %% "fs2-core" % "3.2.7",
+      "co.fs2" %% "fs2-reactive-streams" % "3.2.7",
+      "org.http4s" %% "http4s-core" % "0.23.13",
+      "org.http4s" %% "http4s-server" % "0.23.13" % Test,
     )
   )
 
@@ -81,6 +81,6 @@ lazy val `examples-play` = project.in(file("example"))
     libraryDependencies ++= Seq(
       guice,
       "javax.xml.bind" % "jaxb-api" % "2.3.1",
-      "org.http4s" %% "http4s-dsl" % "0.23.12",
+      "org.http4s" %% "http4s-dsl" % "0.23.13",
     )
   )
