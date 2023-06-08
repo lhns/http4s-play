@@ -5,7 +5,7 @@ lazy val commonSettings: Seq[Setting[_]] = Seq(
   version := "0.0.1-SNAPSHOT",
 
   scalaVersion := "2.13.10",
-  crossScalaVersions := Seq("2.12.17", scalaVersion.value),
+  crossScalaVersions := Seq("2.12.18", scalaVersion.value),
 
   licenses += ("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0")),
 
